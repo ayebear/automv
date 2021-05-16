@@ -1,0 +1,13 @@
+{
+	"name": "automv",
+	"version": "1.0.0",
+	"main": "index.js",
+	"license": "MIT",
+	"dependencies": {
+		"@expo/spawn-async": "^1.5.0",
+		"chokidar": "^3.5.1",
+		"globby": "^11.0.3",
+		"p-queue": "^7.1.0"
+	},
+	"type": "module"
+}
