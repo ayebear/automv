@@ -6,5 +6,5 @@ Simple daemon script to move files matching a glob pattern to an output director
 
 ```
 yarn
-node index.js tmp/*.plot /mnt/networkdrive/plots
+node index.js "tmp/*.plot" "/mnt/networkdrive/plots"
 ```
