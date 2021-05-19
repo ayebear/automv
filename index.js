@@ -15,9 +15,10 @@ async function getFreeDir(src, outDirs) {
 	const { size } = await stat(src)
 	for (const dir of outDirs) {
 		// Check if file will fit in output directory
-		const { free } = await checkDiskSpace(dir)
+		const dirPath = path.resolve(dir)
+		const { free } = await checkDiskSpace(dirPath)
 		if (size < free) {
-			return dir
+			return dirPath
 		}
 	}
 	throw new Error('All specified output directories are full.')
