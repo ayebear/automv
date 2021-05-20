@@ -3,21 +3,29 @@ import path from 'path'
 import fs from 'fs'
 import chokidar from 'chokidar'
 import PQueue from 'p-queue'
-import checkDiskSpace from 'check-disk-space'
-const { stat, copyFile, unlink, rename } = fs.promises
+import spawnAsync from '@expo/spawn-async'
+const { stat, readFile } = fs.promises
 
-// Set to true to skip actual moves
-// TODO: Use environment variable
-const DRY = false
+async function getFreeBytes({ host, user }, directory) {
+	const { stdout } = await spawnAsync('ssh', [
+		`${user}@${host}`,
+		'df',
+		'--output=avail',
+		'-B',
+		'1',
+		directory,
+	])
+	return parseInt(stdout.split('\n')[1], 10)
+}
 
 // Find output directory with enough free space for src file
 // Throws if all are full
-async function getFreeDir(src, outDirs) {
+async function getFreeDir(config, src) {
 	const { size } = await stat(src)
-	for (const dir of outDirs) {
+	for (const dir of config.destDirs) {
 		// Check if file will fit in output directory
 		const dirPath = path.resolve(dir)
-		const { free } = await checkDiskSpace(dirPath)
+		const free = await getFreeBytes(config, dirPath)
 		if (size < free) {
 			return dirPath
 		}
@@ -25,23 +33,31 @@ async function getFreeDir(src, outDirs) {
 	throw new Error('All specified output directories are full.')
 }
 
-async function move(src, outDirs) {
+// Escape spaces in strings
+function esc(str) {
+	return str.trim().replace(/([ /])/g, '\\$1')
+}
+
+async function move(config, src) {
 	try {
 		// Get paths/filenames
-		const outDir = await getFreeDir(src, outDirs)
+		const { user, host, dry } = config
+		const outDir = await getFreeDir(config, src)
 		const srcName = path.basename(src)
-		const tempName = `${srcName}.mvtmp`
-		const tempPath = path.join(outDir, tempName)
 		const outPath = path.join(outDir, srcName)
 		// Atomic move (copy to temp, rename temp to final, delete original)
 		console.log(`Moving: ${src} to ${outPath}`)
-		if (DRY) {
-			console.log(`Dry run, skipped. (${srcName})`)
-			return
-		}
-		await copyFile(src, tempPath)
-		await rename(tempPath, outPath)
-		await unlink(src)
+		await spawnAsync(
+			'rsync',
+			[
+				'-avP',
+				'--remove-source-files',
+				...(dry ? ['--dry-run'] : []),
+				src,
+				`${user}@${host}:${esc(outPath)}`,
+			],
+			{ stdio: 'inherit' }
+		)
 		console.log(`Done! (${srcName})`)
 	} catch (e) {
 		console.error(e)
@@ -49,19 +65,22 @@ async function move(src, outDirs) {
 }
 
 async function main() {
-	const [inGlob, ...outDirs] = process.argv.slice(2)
-	if (!inGlob || outDirs.length === 0) {
-		console.error(`Usage: ${process.argv[1]} inGlob <...outDirs>`)
+	const [configPath] = process.argv.slice(2)
+	if (!configPath) {
+		console.error(`Usage: ${process.argv[1]} config.json`)
 		return
 	}
+	// Read config file
+	const config = JSON.parse(await readFile(configPath))
+	console.log('config', config)
 
 	// Create queue
 	const queue = new PQueue({ concurrency: 1 })
 
 	// Watch for new files to move
-	chokidar.watch(inGlob).on('add', src => {
+	chokidar.watch(config.sourceGlob).on('add', src => {
 		console.log(`Queued move: ${src}`)
-		queue.add(() => move(src, outDirs))
+		queue.add(() => move(config, src))
 	})
 }
 

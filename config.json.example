@@ -1,0 +1,11 @@
+{
+	"host": "server",
+	"user": "admin",
+	"sourceGlob": "/mnt/buffer/plots/*.plot",
+	"destDirs": [
+		"/mnt/drive1/plots",
+		"/mnt/drive2/plots",
+		"/mnt/drive3/plots"
+	],
+	"dry": false
+}

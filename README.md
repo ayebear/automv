@@ -4,7 +4,11 @@ Simple daemon script to move files matching a glob pattern to a list of output d
 
 ## Setup and run example
 
+Make sure `rsync` is installed. Must have ssh keys configured for remote hosts.
+
 ```
 yarn
-node index.js "tmp/*.plot" "/mnt/networkdrive/plots" "/mnt/networkdrive/plots2" "/mnt/networkdrive/plots3"
+cp config.json.example config.json
+# Edit config.json
+./index.js config.json
 ```
