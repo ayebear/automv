@@ -62,7 +62,7 @@ async function move(config, src) {
 		await spawnAsync(
 			'rsync',
 			[
-				'-avP',
+				'-aP',
 				'--remove-source-files',
 				...(dry ? ['--dry-run'] : []),
 				src,
