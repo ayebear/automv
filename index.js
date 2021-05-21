@@ -6,31 +6,43 @@ import PQueue from 'p-queue'
 import spawnAsync from '@expo/spawn-async'
 const { stat, readFile } = fs.promises
 
-async function getFreeBytes({ host, user }, directory) {
+// Given an array of directories, return an array of integers
+// of free bytes for each directory.
+async function getFreeBytes(host, user, dirs) {
 	const { stdout } = await spawnAsync('ssh', [
 		`${user}@${host}`,
 		'df',
 		'--output=avail',
 		'-B',
 		'1',
-		directory,
+		...dirs,
 	])
-	return parseInt(stdout.split('\n')[1], 10)
+	// Parse df command output, match with input
+	return stdout
+		.split('\n')
+		.slice(1, 1 + dirs.length)
+		.map(str => parseInt(str, 10))
 }
 
-// Find output directory with enough free space for src file
+// Find output directory with most free space, that also fits src file
 // Throws if all are full
 async function getFreeDir(config, src) {
 	const { size } = await stat(src)
-	for (const dir of config.destDirs) {
-		// Check if file will fit in output directory
-		const dirPath = path.resolve(dir)
-		const free = await getFreeBytes(config, dirPath)
-		if (size < free) {
-			return dirPath
-		}
+	const freeBytes = await getFreeBytes(
+		config.host,
+		config.user,
+		config.destDirsResolved
+	)
+	const maxIndex = freeBytes.reduce(
+		(a, c, i) => (c > freeBytes[a] ? i : a),
+		0
+	)
+	// Check if file will fit in output directory
+	const freeDir = config.destDirsResolved[maxIndex]
+	if (freeDir && size < freeBytes[maxIndex]) {
+		return freeDir
 	}
-	throw new Error('All specified output directories are full.')
+	throw new Error('No specified output directory fits source file.')
 }
 
 // Escape spaces in strings
@@ -72,7 +84,8 @@ async function main() {
 	}
 	// Read config file
 	const config = JSON.parse(await readFile(configPath))
-	console.log('config', config)
+	config.destDirsResolved = config.destDirs.map(dir => path.resolve(dir))
+	console.log('Processed config:', config)
 
 	// Create queue
 	const queue = new PQueue({ concurrency: 1 })
